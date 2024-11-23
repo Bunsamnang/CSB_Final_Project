@@ -201,12 +201,14 @@ else:
 
         with col2:
                 # Mark task as complete
-            if st.checkbox("Mark Complete", value=task["completed"], key=str(task["_id"])):
+            is_checked = st.checkbox("Mark Complete", value=False, key=str(task["_id"]))
 
+            if is_checked != task["completed"]:
                 tasks_collection.update_one(
                         {"_id": ObjectId(task["_id"])},
-                        {"$set": {"completed": True}},
+                        {"$set": {"completed": is_checked}},
                     )
+                
                
                     
         with col3:
