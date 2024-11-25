@@ -5,30 +5,24 @@ from dotenv import load_dotenv
 from bson.objectid import ObjectId  # To handle MongoDB document IDs
 from bcrypt import hashpw, gensalt, checkpw
 import re
+import time
 # Load environment variables from the .env file
 load_dotenv()
 
+# Singleton connection for MongoDB
 def get_database():
-    try:
-        # Attempt to connect to the database
-        client = MongoClient(os.getenv("MONGO_CONNECTION_STRING"), serverSelectionTimeoutMS=5000)
-        db = client.get_database("todo_app")  # Replace with your database name
-        
-        # Check if the connection is successful
-        client.admin.command('ping')
-        return db
-    except Exception as e:
-        # Log the error for debugging (optional)
-        print(f"Error: {e}")
-        
-        # Display a user-friendly message in Streamlit UI
-        st.error("Failed to connect to the database. Please try again later or check your connection.")
-        
-        # You can also display the error message for debugging (optional)
-        st.text(f"Error details: {e}")
-        
-        # Halt the app to avoid further execution when the DB is not connected
-        st.stop()
+    if "db_client" not in st.session_state:
+        try:
+            client = MongoClient(
+                os.getenv("MONGO_CONNECTION_STRING"), serverSelectionTimeoutMS=5000
+            )
+            client.admin.command('ping')  # Test connection
+            st.session_state["db_client"] = client
+        except Exception as e:
+            st.error("Failed to connect to the database. Please try again later.")
+            st.stop()
+    
+    return st.session_state["db_client"].get_database("todo_app")
 
 # Usage
 db = get_database()
@@ -73,8 +67,11 @@ def create_user(username, password):
 
 # Retrieve all tasks for the logged-in user
 def get_tasks(user_id):
-    return list(tasks_collection.find({"user_id": ObjectId(user_id)}))
-
+    return list(tasks_collection.find(
+        {"user_id": ObjectId(user_id)},
+        {"title": 1, "description": 1, "due_date": 1, "completed": 1}
+    ))
+    
 # Add a new task to the database
 def add_task(user_id, title, description, due_date):
     existing_task = tasks_collection.find_one({"user_id": ObjectId(user_id), "title": title})
@@ -103,6 +100,7 @@ def clear_completed_tasks(user_id):
     if completed_tasks > 0:
         tasks_collection.delete_many({"user_id": ObjectId(user_id), "completed": True})
         st.success("All completed tasks have been cleared.")
+        time.sleep(1)
         st.rerun()
     else:
         st.info("There are no completed tasks to clear.")
@@ -114,7 +112,7 @@ def logout():
 
 
 # App title
-st.markdown("<h1 style='text-align: center;'>To-Do List App</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>To-Do List App📄</h1>", unsafe_allow_html=True)
 
 # Authentication (Login and Sign-Up)
 if st.session_state["user_id"] is None:
@@ -134,6 +132,7 @@ if st.session_state["user_id"] is None:
                 if user_id:
                     st.session_state["user_id"] = user_id  # Set session user ID
                     st.success("Logged in successfully!")
+                    time.sleep(1)
                     st.rerun()
                 else:
                     st.error("Invalid credentials.")
@@ -152,6 +151,7 @@ if st.session_state["user_id"] is None:
                     user = users_collection.find_one({"username": username})
                     st.session_state["user_id"] = str(user["_id"])
                     st.success("User created! Log in now.")
+                    time.sleep(1)
                     st.rerun()
                 else:
                     st.error("Username already exists.")
@@ -167,25 +167,34 @@ else:
         due_date = st.date_input("Due Date")
         
         # Submit button for the form
-        submit_button = st.form_submit_button(label="Add Task")
+        submit_button = st.form_submit_button(label="Add Task📄")
         
         if submit_button:
             if title.strip():  # Ensure title is not empty
-                add_task(st.session_state["user_id"], title, description, due_date)
+                add_task(st.session_state["user_id"], title.strip(), description, due_date)
+                
             else:
                 st.sidebar.error("Task Title is required!")
     
-    # Logout button
-    st.sidebar.button("Log Out", on_click=logout)
+        # Logout button
+        st.sidebar.button("Log Out", on_click=logout)
 
     # Display user tasks
-    st.header("Your Tasks")
+    st.header("Your Tasks📄")
     
 
     tasks = get_tasks(st.session_state["user_id"])  # Fetch tasks for the logged-in user
 
 
-    
+    total_tasks = len(tasks)
+    completed_tasks = sum(1 for task in tasks if task["completed"])
+
+    if total_tasks > 0:
+        st.markdown("### Task Completion Progress")
+        st.progress(completed_tasks / total_tasks)
+    else:
+        st.info("No tasks found. Start adding tasks to see your progress!")
+        
 
 
     for task in tasks:
@@ -193,21 +202,22 @@ else:
         col1, col2, col3 = st.columns([4, 1, 1])
         with col1:
             # Styled task details
-            # style = "text-decoration: line-through; color: gray;" if task["completed"] else ""
+            style = "text-decoration: line-through; color: gray;" if task["completed"] else ""
             st.markdown(
-                f"<div style=''><b>{task['title']}</b><br>{task['description']}<br>Due: {task['due_date']}</div>",
+                f"<div style='{style}'><b style= 'font-size: 1.2rem'>{task['title']}</b><br>{task['description']}<br>Due: {task['due_date']}</div>",
                 unsafe_allow_html=True
             )      
 
         with col2:
                 # Mark task as complete
-            is_checked = st.checkbox("Mark Complete", value=False, key=str(task["_id"]))
+            is_checked = st.checkbox("Mark Complete", value=task["completed"], key=str(task["_id"]))
 
             if is_checked != task["completed"]:
                 tasks_collection.update_one(
                         {"_id": ObjectId(task["_id"])},
                         {"$set": {"completed": is_checked}},
                     )
+                st.rerun()
                 
                
                     
@@ -215,7 +225,10 @@ else:
             # Delete task
             if st.button("Delete", key=f"delete_{task['_id']}"):
                 delete_task(task["_id"])
-        
+
+        # Add space after each task (margin-bottom)
+        st.markdown(f"""
+    <div style="margin-bottom: 10px;"></div>""", unsafe_allow_html=True)  # Adds space between tasks        
     
     st.markdown("---")
     # Clear completed tasks
