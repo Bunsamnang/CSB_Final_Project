@@ -10,7 +10,7 @@ import time
 load_dotenv()
 
 # Singleton connection for MongoDB
-def get_database():
+def initialize_database():
     if "db_client" not in st.session_state:
         try:
             client = MongoClient(
@@ -25,7 +25,7 @@ def get_database():
     return st.session_state["db_client"].get_database("todo_app")
 
 # Usage
-db = get_database()
+db = initialize_database()
 if db is not None:
     users_collection = db["users"]
     tasks_collection = db["tasks"]
