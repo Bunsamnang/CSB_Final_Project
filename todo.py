@@ -54,7 +54,7 @@ def is_valid_password(password):
     - At least one special character
     - Minimum length of 8 characters
     """
-    pattern = r"^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$"
+    pattern = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()\-_+={}[\]|\\:;"\'<>,.?/~`])[A-Za-z\d!@#$%^&*()\-_+={}[\]|\\:;"\'<>,.?/~`]{8,}$'
     return re.match(pattern, password) is not None
 
 # Function to create a new user
